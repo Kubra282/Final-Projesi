@@ -1,4 +1,4 @@
-### Homomorfik Şifreleme Kodları için Yol Haritası
+#  Homomorfik Şifreleme Kodları için Yol Haritası
 
 #### 1. Ortam Hazırlığı ve Kurulum 
 **Amaç**: Kodların çalıştırılacağı geliştirme ortamını hazırlamak ve gerekli kütüphaneleri kurmak.
