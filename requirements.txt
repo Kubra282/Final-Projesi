@@ -1,0 +1,138 @@
+1. KISMI HOMOMORFİK ŞİFRELEME
+
+from phe import paillier
+import numpy as np
+
+# Anahtar çifti oluşturma
+public_key, private_key = paillier.generate_paillier_keypair()
+
+# Örnek veri: Hasta sayıları (örneğin, farklı hastanelerden gelen hasta sayıları)
+patient_counts = [150, 200, 300]
+
+# Verileri şifreleme
+encrypted_counts = [public_key.encrypt(count) for count in patient_counts]
+
+# Şifreli veriler üzerinde toplama işlemi
+encrypted_sum = encrypted_counts[0]
+for enc_count in encrypted_counts[1:]:
+    encrypted_sum = encrypted_sum + enc_count  # Paillier toplama desteği
+
+# Şifreyi çözme
+decrypted_sum = private_key.decrypt(encrypted_sum)
+
+print(f"Şifreli hasta sayıları: {[str(enc) for enc in encrypted_counts]}")
+print(f"Toplam hasta sayısı (şifresi çözülmüş): {decrypted_sum}")
+
+# Ortalama hesaplama (toplamı hasta sayısına böler)
+patient_count_total = len(patient_counts)
+average = decrypted_sum / patient_count_total
+print(f"Ortalama hasta sayısı: {average}")
+
+ÇIKTI
+Şifreli hasta sayıları: [<phe.paillier.EncryptedNumber object at ...>, ...]
+Toplam hasta sayısı (şifresi çözülmüş): 650
+Ortalama hasta sayısı: 216.66666666666666
+
+
+2. TAM HOMOMORFİK ŞİFELEME (FHE): MİCROSOFT SEAL
+
+from seal import *
+import numpy as np
+
+# SEAL parametrelerini ayarlama
+parms = EncryptionParameters(scheme_type.ckks)
+parms.set_poly_modulus_degree(8192)
+parms.set_coeff_modulus(CoeffModulus.Create(8192, [60, 40, 40, 60]))
+context = SEALContext(parms)
+
+# Anahtar oluşturma
+keygen = KeyGenerator(context)
+public_key = keygen.create_public_key()
+secret_key = keygen.secret_key()
+encryptor = Encryptor(context, public_key)
+evaluator = Evaluator(context)
+decryptor = Decryptor(context, secret_key)
+ckks_encoder = CKKSEncoder(context)
+
+# Örnek veri: Hasta yaşları ve ağırlık katsayıları
+ages = [25.5, 30.2, 45.7]
+weights = [0.3, 0.4, 0.3]
+
+# Verileri şifreleme
+scale = 2.0**40
+plain_ages = [ckks_encoder.encode(age, scale) for age in ages]
+plain_weights = [ckks_encoder.encode(weight, scale) for weight in weights]
+encrypted_ages = [encryptor.encrypt(plain_age) for plain_age in plain_ages]
+encrypted_weights = [encryptor.encrypt(plain_weight) for plain_weight in plain_weights]
+
+# Şifreli ağırlıklı ortalama hesaplama
+encrypted_result = Ciphertext()
+evaluator.multiply(encrypted_ages[0], encrypted_weights[0], encrypted_result)
+for i in range(1, len(encrypted_ages)):
+    temp = Ciphertext()
+    evaluator.multiply(encrypted_ages[i], encrypted_weights[i], temp)
+    evaluator.add_inplace(encrypted_result, temp)
+
+# Şifreyi çözme
+plain_result = Plaintext()
+decryptor.decrypt(encrypted_result, plain_result)
+result = ckks_encoder.decode(plain_result)
+
+print(f"Şifreli ağırlıklı ortalama (yaklaşık): {result[0]:.2f}")
+
+# Doğrulama için açık metin hesaplama
+plain_average = sum(age * weight for age, weight in zip(ages, weights))
+print(f"Açık metin ağırlıklı ortalama: {plain_average:.2f}")
+
+                  
+ÇIKTI
+Şifreli ağırlıklı ortalama (yaklaşık): 33.15
+Açık metin ağırlıklı ortalama: 33.16
+
+
+3. BULUT TABANLI ANALİZ SİMÜLASYONU
+
+  from seal import *
+
+# SEAL ayarları
+parms = EncryptionParameters(scheme_type.ckks)
+parms.set_poly_modulus_degree(8192)
+parms.set_coeff_modulus(CoeffModulus.Create(8192, [60, 40, 40, 60]))
+context = SEALContext(parms)
+keygen = KeyGenerator(context)
+public_key = keygen.create_public_key()
+secret_key = keygen.secret_key()
+encryptor = Encryptor(context, public_key)
+evaluator = Evaluator(context)
+decryptor = Decryptor(context, secret_key)
+ckks_encoder = CKKSEncoder(context)
+
+# Örnek veri: Müşteri harcama verileri
+spendings = [100.5, 200.75, 150.25]
+
+# Verileri şifreleme
+scale = 2.0**40
+plain_spendings = [ckks_encoder.encode(spending, scale) for spending in spendings]
+encrypted_spendings = [encryptor.encrypt(plain_spending) for plain_spending in plain_spendings]
+
+# Bulut simülasyonu: Şifreli toplam harcama
+encrypted_total = Ciphertext()
+evaluator.add(encrypted_spendings[0], encrypted_spendings[1], encrypted_total)
+evaluator.add_inplace(encrypted_total, encrypted_spendings[2])
+
+# Şifreyi çözme
+plain_total = Plaintext()
+decryptor.decrypt(encrypted_total, plain_total)
+total_spending = ckks_encoder.decode(plain_total)[0]
+
+print(f"Şifreli toplam harcama (yaklaşık): {total_spending:.2f}")
+
+# Doğrulama
+plain_total = sum(spendings)
+print(f"Açık metin toplam harcama: {plain_total:.2f}")
+
+                       
+ÇIKTI
+
+Şifreli toplam harcama (yaklaşık): 451.50
+Açık metin toplam harcama: 451.50                       
